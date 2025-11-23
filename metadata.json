@@ -1,0 +1,5 @@
+{
+  "name": "EchoBack - The Back-Translation Trainer",
+  "description": "A specialized language learning tool implementing the 'Back-translation' method. It uses AI to generate native content, facilitates the study-hide-translate loop, and provides deep gap analysis between your output and the native original.",
+  "requestFramePermissions": []
+}

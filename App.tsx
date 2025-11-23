@@ -1,0 +1,528 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  BookOpen, 
+  RefreshCw, 
+  Languages, 
+  ArrowRight, 
+  Eye, 
+  EyeOff, 
+  Send, 
+  Sparkles,
+  RotateCcw,
+  Settings as SettingsIcon,
+  BookMarked,
+  Menu,
+  ChevronLeft
+} from 'lucide-react';
+import Button from './components/Button';
+import AnalysisCard from './components/AnalysisCard';
+import SettingsModal from './components/SettingsModal';
+import Notebook from './components/Notebook';
+import Sidebar from './components/Sidebar';
+import { AppState, Difficulty, Challenge, AnalysisResult, Topic, ContentLength, NotebookEntry, GapAnalysisItem, HistoryRecord } from './types';
+import { generateChallenge, analyzeTranslation } from './services/geminiService';
+import { db } from './services/db';
+
+const App: React.FC = () => {
+  const [state, setState] = useState<AppState>(AppState.IDLE);
+  
+  // Preferences
+  const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.INTERMEDIATE);
+  const [topic, setTopic] = useState<Topic>(Topic.GENERAL);
+  const [contentLength, setContentLength] = useState<ContentLength>(ContentLength.SENTENCE);
+  
+  // Data State
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [userTranslation, setUserTranslation] = useState('');
+  const [isOriginalHidden, setIsOriginalHidden] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // History & Persistence
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile toggle
+
+  // UI State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
+  const [currentSessionSavedIndices, setCurrentSessionSavedIndices] = useState<number[]>([]);
+
+  // Ref for auto-focusing
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+
+  // Load Data from IDB
+  useEffect(() => {
+      const loadData = async () => {
+          try {
+              const [hist, nb] = await Promise.all([
+                  db.getHistory(),
+                  db.getNotebookEntries()
+              ]);
+              setHistory(hist);
+              setNotebookEntries(nb);
+          } catch (e) {
+              console.error("Failed to load data from DB", e);
+          }
+      };
+      loadData();
+  }, []);
+
+  // Scroll to top on state change
+  useEffect(() => {
+      if (state === AppState.IDLE || state === AppState.REVIEW) {
+          mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+  }, [state]);
+
+  // Focus Input
+  useEffect(() => {
+    if (state === AppState.INPUT && inputRef.current) {
+        // Small delay to ensure render
+        setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [state]);
+
+  const handleStart = async () => {
+    setState(AppState.GENERATING);
+    setError(null);
+    setAnalysis(null);
+    setUserTranslation('');
+    setIsOriginalHidden(false);
+    setCurrentSessionSavedIndices([]); 
+    setCurrentRecordId(null); // New session, no record ID yet
+
+    try {
+      const newChallenge = await generateChallenge(difficulty, topic, contentLength);
+      setChallenge(newChallenge);
+      setState(AppState.STUDY);
+    } catch (err) {
+      setError("Failed to generate content. Please check your connection or try again.");
+      setState(AppState.IDLE);
+    }
+  };
+
+  const handleProceedToInput = () => {
+    setIsOriginalHidden(true);
+    setState(AppState.INPUT);
+  };
+
+  const handleSubmit = async () => {
+    if (!challenge || !userTranslation.trim()) return;
+
+    setState(AppState.ANALYZING);
+    try {
+      const result = await analyzeTranslation(challenge.english, userTranslation, challenge.context);
+      setAnalysis(result);
+      setIsOriginalHidden(false); 
+      
+      // Save to History DB
+      const record: HistoryRecord = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          difficulty,
+          topic,
+          challenge,
+          userTranslation,
+          analysis: result
+      };
+
+      await db.saveHistory(record);
+      setHistory(prev => [record, ...prev]);
+      setCurrentRecordId(record.id);
+
+      setState(AppState.REVIEW);
+    } catch (err) {
+      setError("Analysis failed. Please try again.");
+      setState(AppState.INPUT);
+    }
+  };
+
+  const handleRetry = () => {
+      setUserTranslation('');
+      setAnalysis(null);
+      setState(AppState.STUDY);
+      setIsOriginalHidden(false);
+      setCurrentSessionSavedIndices([]);
+      setCurrentRecordId(null);
+  };
+
+  const handleSaveGap = async (gap: GapAnalysisItem) => {
+      if (!challenge || !analysis) return;
+      
+      const entry: NotebookEntry = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          originalContext: challenge.english,
+          gapType: gap.type,
+          nativeSegment: gap.nativeSegment,
+          userSegment: gap.userSegment,
+          explanation: gap.explanation
+      };
+
+      await db.saveNotebookEntry(entry);
+      setNotebookEntries(prev => [entry, ...prev]);
+      
+      const gapIndex = analysis.gaps.indexOf(gap);
+      if (gapIndex !== -1) {
+          setCurrentSessionSavedIndices(prev => [...prev, gapIndex]);
+      }
+  };
+
+  const handleDeleteNotebookEntry = async (id: string) => {
+      await db.deleteNotebookEntry(id);
+      setNotebookEntries(prev => prev.filter(e => e.id !== id));
+  };
+
+  const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      await db.deleteHistory(id);
+      setHistory(prev => prev.filter(h => h.id !== id));
+      if (currentRecordId === id) {
+          setState(AppState.IDLE);
+          setCurrentRecordId(null);
+      }
+  };
+
+  const handleSelectHistory = (record: HistoryRecord) => {
+      setChallenge(record.challenge);
+      setUserTranslation(record.userTranslation);
+      setAnalysis(record.analysis);
+      setCurrentRecordId(record.id);
+      setDifficulty(record.difficulty);
+      setTopic(record.topic);
+      
+      // Determine what was saved for this specific historical record is hard without a relational mapping,
+      // but we can try to find matches in notebook entries by content/timestamp if we wanted strict accuracy.
+      // For now, we clear the "saved" visual indicators for old history to avoid confusion, 
+      // or we could implement a smarter check. Let's clear to be safe.
+      setCurrentSessionSavedIndices([]);
+
+      setState(AppState.REVIEW);
+  };
+
+  return (
+    <div className="flex h-screen bg-slate-50 text-slate-800 overflow-hidden">
+      
+      {/* Sidebar */}
+      <Sidebar 
+        isOpen={isSidebarOpen}
+        history={history}
+        onSelect={handleSelectHistory}
+        onDelete={handleDeleteHistory}
+        currentRecordId={currentRecordId}
+        onCloseMobile={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+        
+        {/* Modals */}
+        <SettingsModal 
+            isOpen={isSettingsOpen} 
+            onClose={() => setIsSettingsOpen(false)}
+            difficulty={difficulty}
+            setDifficulty={setDifficulty}
+            topic={topic}
+            setTopic={setTopic}
+            contentLength={contentLength}
+            setContentLength={setContentLength}
+        />
+
+        <Notebook 
+            isOpen={isNotebookOpen}
+            onClose={() => setIsNotebookOpen(false)}
+            entries={notebookEntries}
+            onDelete={handleDeleteNotebookEntry}
+        />
+
+        {/* Header */}
+        <header className="bg-white border-b border-slate-200 flex-shrink-0 z-20 shadow-sm">
+            <div className="px-4 h-16 flex items-center justify-between">
+                <div className="flex items-center">
+                    <button 
+                        className="md:hidden mr-3 p-2 hover:bg-slate-100 rounded-lg text-slate-500"
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    >
+                        <Menu size={20} />
+                    </button>
+                    
+                    <div 
+                        className="flex items-center space-x-2 cursor-pointer" 
+                        onClick={() => setState(AppState.IDLE)}
+                    >
+                        <div className="bg-indigo-600 p-1.5 rounded-lg hidden sm:block">
+                            <Languages className="text-white h-4 w-4" />
+                        </div>
+                        <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
+                        EchoBack
+                        </h1>
+                    </div>
+                </div>
+            
+                <div className="flex items-center space-x-2">
+                    <button 
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
+                        title="Settings"
+                    >
+                        <SettingsIcon size={20} />
+                    </button>
+                    
+                    <button 
+                        onClick={() => setIsNotebookOpen(true)}
+                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
+                        title="My Notebook"
+                    >
+                        <BookMarked size={20} />
+                        {notebookEntries.length > 0 && (
+                            <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-amber-500 rounded-full border-2 border-white"></span>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        {/* Scrollable Main View */}
+        <div ref={mainScrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth">
+            
+            <div className="max-w-3xl mx-auto pb-20">
+                {/* Error Banner */}
+                {error && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg flex items-start animate-pulse">
+                        <div className="flex-1 text-red-700 font-medium">{error}</div>
+                        <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 font-bold">✕</button>
+                    </div>
+                )}
+
+                {/* STATE: IDLE */}
+                {state === AppState.IDLE && (
+                <div className="flex flex-col items-center text-center space-y-8 mt-4 animate-in fade-in duration-500">
+                    <div className="max-w-lg">
+                        <h2 className="text-3xl font-bold text-slate-900 mb-4">Master English through Back-Translation</h2>
+                        <p className="text-slate-600 text-lg leading-relaxed">
+                            The professional "Echo Method". Study native text, hide it, recreate it, and bridge the gap.
+                        </p>
+                    </div>
+
+                    <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="mb-4 flex justify-between items-center text-sm text-slate-500 border-b border-slate-100 pb-3">
+                            <span>Current Config:</span>
+                            <button 
+                                onClick={() => setIsSettingsOpen(true)}
+                                className="text-indigo-600 hover:text-indigo-700 font-medium flex items-center"
+                            >
+                                Edit <SettingsIcon size={14} className="ml-1" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 justify-center mb-6">
+                            <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{difficulty}</span>
+                            <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{topic}</span>
+                            <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{contentLength}</span>
+                        </div>
+
+                        <Button 
+                            onClick={handleStart} 
+                            className="w-full justify-center py-3 text-lg shadow-lg shadow-indigo-200"
+                        >
+                            Start New Session
+                        </Button>
+                    </div>
+                    
+                    <div className="text-xs text-slate-400 mt-8">
+                        Select a past session from the sidebar to review.
+                    </div>
+                </div>
+                )}
+
+                {/* STATE: GENERATING */}
+                {state === AppState.GENERATING && (
+                    <div className="flex flex-col items-center justify-center py-32 space-y-6">
+                        <div className="relative">
+                            <div className="h-16 w-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin"></div>
+                            <Sparkles className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-indigo-600 h-6 w-6" />
+                        </div>
+                        <p className="text-slate-500 font-medium animate-pulse">
+                            Curating {topic.toLowerCase()} content...
+                        </p>
+                    </div>
+                )}
+
+                {/* STATE: STUDY MODE */}
+                {state === AppState.STUDY && challenge && (
+                    <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-500">
+                        <div className="flex items-center justify-between mb-6">
+                            <span className="text-xs font-bold tracking-wider text-indigo-500 uppercase bg-indigo-50 px-3 py-1 rounded-full">
+                                Step 1: Input & Understand
+                            </span>
+                            <button onClick={handleStart} className="text-slate-400 hover:text-slate-600 transition-colors flex items-center text-sm">
+                                <RotateCcw size={14} className="mr-1" /> New
+                            </button>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+                            <div className="bg-slate-50 px-6 py-3 border-b border-slate-100 flex justify-between items-center">
+                                <span className="text-sm font-medium text-slate-500 flex items-center">
+                                    <BookOpen size={16} className="mr-2" />
+                                    Context: {challenge.context}
+                                </span>
+                            </div>
+                            
+                            <div className="p-8 space-y-8">
+                                <div>
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Native English</h3>
+                                    <p className="text-2xl font-serif text-slate-900 leading-relaxed selection:bg-indigo-100 selection:text-indigo-800">
+                                        {challenge.english}
+                                    </p>
+                                </div>
+                                
+                                <div className="relative">
+                                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                        <div className="w-full border-t border-slate-100"></div>
+                                    </div>
+                                    <div className="relative flex justify-center">
+                                        <span className="bg-white px-2 text-slate-300 text-xs uppercase">Translation</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Chinese Meaning</h3>
+                                    <p className="text-xl font-medium text-slate-700">
+                                        {challenge.chinese}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-8 text-sm text-blue-800 flex items-start">
+                            <Eye className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5" />
+                            <p>Read the English sentence carefully. Understand the structure. When you are ready, we will hide it.</p>
+                        </div>
+
+                        <Button onClick={handleProceedToInput} size="lg" className="w-full justify-center">
+                            I'm Ready to Translate <ArrowRight className="ml-2 h-5 w-5" />
+                        </Button>
+                    </div>
+                )}
+
+                {/* STATE: INPUT MODE */}
+                {state === AppState.INPUT && challenge && (
+                    <div className="max-w-2xl mx-auto animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between mb-6">
+                            <span className="text-xs font-bold tracking-wider text-purple-500 uppercase bg-purple-50 px-3 py-1 rounded-full">
+                                Step 2: Output (Back-Translation)
+                            </span>
+                            <button onClick={() => setState(AppState.STUDY)} className="text-sm text-slate-400 hover:text-indigo-600">
+                                Peek at Original
+                            </button>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                            {/* Blurred Original */}
+                            <div className="p-6 bg-slate-50 border-b border-slate-100 relative select-none">
+                                <div className="filter blur-sm opacity-40 pointer-events-none select-none" aria-hidden="true">
+                                    <p className="text-xl font-serif text-slate-900">{challenge.english}</p>
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm flex items-center text-slate-500 text-sm font-medium border border-slate-200">
+                                        <EyeOff size={16} className="mr-2" />
+                                        Hidden
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Chinese Prompt */}
+                            <div className="px-6 py-4 bg-white">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Translate back to English</h3>
+                                <p className="text-lg font-medium text-slate-800">{challenge.chinese}</p>
+                            </div>
+
+                            {/* User Input - White Theme */}
+                            <div className="p-6 bg-slate-50 border-t border-slate-100">
+                                <textarea
+                                    ref={inputRef}
+                                    value={userTranslation}
+                                    onChange={(e) => setUserTranslation(e.target.value)}
+                                    placeholder="Type the English translation here..."
+                                    className="w-full p-4 text-xl text-slate-900 bg-white placeholder:text-slate-400 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none min-h-[160px] outline-none shadow-sm transition-all"
+                                    spellCheck={false}
+                                />
+                            </div>
+                        </div>
+
+                        <Button 
+                            onClick={handleSubmit} 
+                            size="lg" 
+                            className="w-full justify-center"
+                            disabled={userTranslation.length < 3}
+                        >
+                            Check My Translation <Send className="ml-2 h-4 w-4" />
+                        </Button>
+                    </div>
+                )}
+
+                {/* STATE: ANALYZING */}
+                {state === AppState.ANALYZING && (
+                    <div className="flex flex-col items-center justify-center py-24 space-y-6">
+                        <div className="flex space-x-2">
+                            <div className="h-4 w-4 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                            <div className="h-4 w-4 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                            <div className="h-4 w-4 bg-indigo-600 rounded-full animate-bounce"></div>
+                        </div>
+                        <p className="text-slate-600 font-medium">AI Teacher is analyzing your work...</p>
+                    </div>
+                )}
+
+                {/* STATE: REVIEW (Used for both fresh analysis and History playback) */}
+                {state === AppState.REVIEW && analysis && challenge && (
+                    <div className="max-w-3xl mx-auto">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center">
+                                {currentRecordId && (
+                                    <span className="mr-3 text-xs font-bold text-slate-400 uppercase bg-slate-100 px-2 py-1 rounded">
+                                        Historical Review
+                                    </span>
+                                )}
+                                <span className="text-xs font-bold tracking-wider text-emerald-600 uppercase bg-emerald-50 px-3 py-1 rounded-full">
+                                    Step 3: Gap Analysis
+                                </span>
+                            </div>
+                            
+                            <div className="flex space-x-3">
+                                {!currentRecordId && (
+                                    <Button variant="outline" size="sm" onClick={handleRetry} className="flex items-center">
+                                    <RefreshCw size={14} className="mr-2" /> Retry
+                                    </Button>
+                                )}
+                                <Button size="sm" onClick={handleStart} className="flex items-center">
+                                    Next Challenge <ArrowRight size={14} className="ml-2" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <AnalysisCard 
+                            analysis={analysis} 
+                            original={challenge.english}
+                            userTranslation={userTranslation}
+                            onSaveGap={handleSaveGap}
+                            savedGapIndices={currentSessionSavedIndices}
+                        />
+
+                         <div className="mt-12 flex justify-center">
+                            <Button variant="secondary" onClick={handleStart} size="lg" className="shadow-xl shadow-emerald-100 px-12">
+                                Start New Session
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
