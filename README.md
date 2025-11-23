@@ -1,20 +1,16 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# EchoBack - The Back-Translation Trainer
 
-# Run and deploy your AI Studio app
+A specialized language learning tool implementing the "Back-translation" method. It uses AI to generate native content, facilitates the study-hide-translate loop, and provides deep gap analysis between your output and the native original.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1-Bp2Eh-ww_fZNMbf4OBTvUZtsC-Xpia0
+- **AI-Powered Content**: Generates authentic English sentences and paragraphs based on difficulty and topic (Daily Life, Business, Academic, etc.).
+- **Back-Translation Workflow**: Study the original, hide it, translate back from Chinese, and compare.
+- **Gap Analysis**: Detailed breakdown of grammar, vocabulary, and tone differences with scoring.
+- **Mistake Notebook**: Save specific errors (grammar, vocab) to your personal notebook for focused review.
+- **History Timeline**: Automatically saves your sessions locally (IndexedDB) so you can review past performance anytime.
+- **Persistent Settings**: Customize difficulty and content length.
 
-## Run Locally
+## Screenshot
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+![App Screenshot](screenshot.png)
