@@ -194,12 +194,7 @@ const App: React.FC = () => {
       setDifficulty(record.difficulty);
       setTopic(record.topic);
       
-      // Determine what was saved for this specific historical record is hard without a relational mapping,
-      // but we can try to find matches in notebook entries by content/timestamp if we wanted strict accuracy.
-      // For now, we clear the "saved" visual indicators for old history to avoid confusion, 
-      // or we could implement a smarter check. Let's clear to be safe.
       setCurrentSessionSavedIndices([]);
-
       setState(AppState.REVIEW);
   };
 
@@ -506,6 +501,7 @@ const App: React.FC = () => {
                         <AnalysisCard 
                             analysis={analysis} 
                             original={challenge.english}
+                            chinese={challenge.chinese}
                             userTranslation={userTranslation}
                             onSaveGap={handleSaveGap}
                             savedGapIndices={currentSessionSavedIndices}

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AnalysisResult, GapAnalysisItem } from '../types';
-import { AlertCircle, CheckCircle, Award, ArrowRight, Bookmark, Check } from 'lucide-react';
+import { AlertCircle, CheckCircle, Award, ArrowRight, Bookmark, Check, Languages, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface AnalysisCardProps {
   analysis: AnalysisResult;
   original: string;
+  chinese: string;
   userTranslation: string;
   onSaveGap: (gap: GapAnalysisItem) => void;
   savedGapIndices: number[];
@@ -12,11 +13,13 @@ interface AnalysisCardProps {
 
 const AnalysisCard: React.FC<AnalysisCardProps> = ({ 
     analysis, 
-    original, 
+    original,
+    chinese,
     userTranslation, 
     onSaveGap,
     savedGapIndices
 }) => {
+  const [showChinese, setShowChinese] = useState(false);
   
   const getBadgeColor = (type: GapAnalysisItem['type']) => {
     switch (type) {
@@ -28,7 +31,7 @@ const AnalysisCard: React.FC<AnalysisCardProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
       {/* Score Header */}
       <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -40,6 +43,26 @@ const AnalysisCard: React.FC<AnalysisCardProps> = ({
           <span className="text-xl font-bold">{analysis.score}</span>
           <span className="text-[10px] uppercase tracking-wide font-semibold">Score</span>
         </div>
+      </div>
+
+      {/* Source Text (Collapsible) */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <button 
+            onClick={() => setShowChinese(!showChinese)}
+            className="w-full px-6 py-3 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+        >
+            <span className="text-sm font-semibold text-slate-600 flex items-center">
+            <Languages className="w-4 h-4 mr-2 text-indigo-500" />
+            Original Chinese Source
+            </span>
+            {showChinese ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+        </button>
+        
+        {showChinese && (
+            <div className="px-6 py-4 border-t border-slate-100 animate-in slide-in-from-top-1 bg-slate-50/50">
+            <p className="text-lg font-medium text-slate-800">{chinese}</p>
+            </div>
+        )}
       </div>
 
       {/* Direct Comparison */}
@@ -66,7 +89,7 @@ const AnalysisCard: React.FC<AnalysisCardProps> = ({
 
       {/* Gap Analysis List */}
       <div className="space-y-4">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center pt-2">
           <AlertCircle className="w-5 h-5 mr-2 text-indigo-500" />
           The Gap Analysis
         </h3>

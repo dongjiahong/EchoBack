@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HistoryRecord } from '../types';
-import { Clock, CheckCircle2, MoreVertical, Trash2, CalendarDays, History } from 'lucide-react';
+import { Clock, CheckCircle2, MoreVertical, Trash2, CalendarDays, History, Languages } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -10,6 +10,79 @@ interface SidebarProps {
   currentRecordId: string | null;
   onCloseMobile: () => void;
 }
+
+// Sub-component for individual history items to manage "Show Chinese" state independently
+const SidebarItem: React.FC<{
+    record: HistoryRecord;
+    isActive: boolean;
+    onSelect: (record: HistoryRecord) => void;
+    onDelete: (id: string, e: React.MouseEvent) => void;
+    onCloseMobile: () => void;
+}> = ({ record, isActive, onSelect, onDelete, onCloseMobile }) => {
+    const [showChinese, setShowChinese] = useState(false);
+
+    return (
+        <div 
+            onClick={() => {
+                onSelect(record);
+                onCloseMobile();
+            }}
+            className={`
+                relative group cursor-pointer p-3 rounded-xl border transition-all hover:shadow-md
+                ${isActive
+                ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' 
+                : 'bg-white border-slate-200 hover:border-indigo-100'}
+            `}
+        >
+            {/* Timeline Dot */}
+            <div className={`absolute -left-[23px] top-4 w-3 h-3 rounded-full border-2 border-white ${isActive ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
+
+            <div className="flex justify-between items-start mb-1">
+                <span className="text-[10px] font-medium text-slate-400">
+                    {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <div className={`flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded ${record.analysis.score >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {record.analysis.score}
+                </div>
+            </div>
+
+            <div className="flex items-start justify-between mb-1">
+                <p className="text-xs text-slate-500 line-clamp-1 italic flex-1">
+                    "{record.challenge.context}"
+                </p>
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowChinese(!showChinese);
+                    }}
+                    className={`ml-2 p-1 rounded hover:bg-slate-200 transition-colors ${showChinese ? 'text-indigo-600 bg-indigo-50' : 'text-slate-300'}`}
+                    title="Toggle Chinese Translation"
+                >
+                    <Languages size={12} />
+                </button>
+            </div>
+
+            <p className="text-sm font-medium text-slate-800 line-clamp-2 leading-snug">
+                {record.challenge.english}
+            </p>
+
+            {showChinese && (
+                <div className="mt-2 pt-2 border-t border-slate-100 animate-in fade-in duration-200">
+                    <p className="text-xs text-slate-600 font-medium">
+                        {record.challenge.chinese}
+                    </p>
+                </div>
+            )}
+
+            <button 
+                onClick={(e) => onDelete(record.id, e)}
+                className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded"
+            >
+                <Trash2 size={14} />
+            </button>
+        </div>
+    );
+};
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   isOpen, 
@@ -83,45 +156,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </h3>
                   <div className="space-y-3 relative border-l-2 border-slate-100 ml-1.5 pl-4">
                     {items.map((record) => (
-                      <div 
-                        key={record.id}
-                        onClick={() => {
-                          onSelect(record);
-                          onCloseMobile();
-                        }}
-                        className={`
-                          relative group cursor-pointer p-3 rounded-xl border transition-all hover:shadow-md
-                          ${currentRecordId === record.id 
-                            ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' 
-                            : 'bg-white border-slate-200 hover:border-indigo-100'}
-                        `}
-                      >
-                         {/* Timeline Dot */}
-                         <div className={`absolute -left-[23px] top-4 w-3 h-3 rounded-full border-2 border-white ${currentRecordId === record.id ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
-
-                         <div className="flex justify-between items-start mb-1">
-                            <span className="text-[10px] font-medium text-slate-400">
-                              {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            <div className={`flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded ${record.analysis.score >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                               {record.analysis.score}
-                            </div>
-                         </div>
-
-                         <p className="text-xs text-slate-500 mb-1 line-clamp-1 italic">
-                            "{record.challenge.context}"
-                         </p>
-                         <p className="text-sm font-medium text-slate-800 line-clamp-2 leading-snug">
-                            {record.challenge.english}
-                         </p>
-
-                         <button 
-                            onClick={(e) => onDelete(record.id, e)}
-                            className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded"
-                         >
-                            <Trash2 size={14} />
-                         </button>
-                      </div>
+                        <SidebarItem 
+                            key={record.id}
+                            record={record}
+                            isActive={currentRecordId === record.id}
+                            onSelect={onSelect}
+                            onDelete={onDelete}
+                            onCloseMobile={onCloseMobile}
+                        />
                     ))}
                   </div>
                 </div>
