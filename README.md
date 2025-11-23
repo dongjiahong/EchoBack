@@ -13,4 +13,4 @@ A specialized language learning tool implementing the "Back-translation" method.
 
 ## Screenshot
 
-![App Screenshot](screenshot.png)
+![App Screenshot](./screenshot.png)
