@@ -31,6 +31,7 @@ export class EchoDB {
       };
 
       request.onerror = (event) => {
+        console.error("IndexedDB open failed:", (event.target as IDBOpenDBRequest).error);
         reject((event.target as IDBOpenDBRequest).error);
       };
     });
