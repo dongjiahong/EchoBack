@@ -50,6 +50,26 @@ export class EchoDB {
     });
   }
 
+  async saveHistoryBatch(records: HistoryRecord[]): Promise<void> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_HISTORY], "readwrite");
+      const store = transaction.objectStore(STORE_HISTORY);
+      
+      let processed = 0;
+      if (records.length === 0) resolve();
+
+      records.forEach(record => {
+          const request = store.put(record);
+          request.onsuccess = () => {
+              processed++;
+              if (processed === records.length) resolve();
+          };
+          request.onerror = () => reject(request.error);
+      });
+    });
+  }
+
   async getHistory(): Promise<HistoryRecord[]> {
     const db = await this.dbPromise;
     return new Promise((resolve, reject) => {
@@ -90,6 +110,26 @@ export class EchoDB {
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  async saveNotebookBatch(entries: NotebookEntry[]): Promise<void> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NOTEBOOK], "readwrite");
+      const store = transaction.objectStore(STORE_NOTEBOOK);
+      
+      let processed = 0;
+      if (entries.length === 0) resolve();
+
+      entries.forEach(entry => {
+          const request = store.put(entry);
+          request.onsuccess = () => {
+              processed++;
+              if (processed === entries.length) resolve();
+          };
+          request.onerror = () => reject(request.error);
+      });
     });
   }
 

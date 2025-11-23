@@ -68,3 +68,10 @@ export interface HistoryRecord {
   userTranslation: string;
   analysis: AnalysisResult;
 }
+
+export interface WebDAVConfig {
+  url: string;
+  username: string;
+  password: string;
+  enabled: boolean;
+}

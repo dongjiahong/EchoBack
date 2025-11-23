@@ -12,7 +12,8 @@ import {
   Settings as SettingsIcon,
   BookMarked,
   Menu,
-  ChevronLeft
+  ChevronLeft,
+  Cloud
 } from 'lucide-react';
 import Button from './components/Button';
 import AnalysisCard from './components/AnalysisCard';
@@ -22,6 +23,7 @@ import Sidebar from './components/Sidebar';
 import { AppState, Difficulty, Challenge, AnalysisResult, Topic, ContentLength, NotebookEntry, GapAnalysisItem, HistoryRecord } from './types';
 import { generateChallenge, analyzeTranslation } from './services/geminiService';
 import { db } from './services/db';
+import { webdav } from './services/webdav';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.IDLE);
@@ -42,6 +44,7 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile toggle
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -53,22 +56,51 @@ const App: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
-  // Load Data from IDB
+  // Load Data from IDB & Sync
   useEffect(() => {
-      const loadData = async () => {
+      const initApp = async () => {
           try {
-              const [hist, nb] = await Promise.all([
+              // 1. Load Local
+              let [hist, nb] = await Promise.all([
                   db.getHistory(),
                   db.getNotebookEntries()
               ]);
               setHistory(hist);
               setNotebookEntries(nb);
+
+              // 2. Try Sync if Configured
+              if (webdav.getConfig()?.enabled) {
+                  await performSync(hist, nb);
+              }
           } catch (e) {
               console.error("Failed to load data from DB", e);
           }
       };
-      loadData();
+      initApp();
   }, []);
+
+  const performSync = async (currentHistory: HistoryRecord[], currentNotebook: NotebookEntry[]) => {
+      setIsSyncing(true);
+      try {
+          const result = await webdav.syncData(currentHistory, currentNotebook);
+          
+          // Update DB
+          await db.saveHistoryBatch(result.history);
+          await db.saveNotebookBatch(result.notebook);
+
+          // Update State
+          setHistory(result.history);
+          setNotebookEntries(result.notebook);
+      } catch (err) {
+          console.error("Sync failed", err);
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
+  const handleManualSync = () => {
+      performSync(history, notebookEntries);
+  };
 
   // Scroll to top on state change
   useEffect(() => {
@@ -130,8 +162,12 @@ const App: React.FC = () => {
       };
 
       await db.saveHistory(record);
-      setHistory(prev => [record, ...prev]);
+      const newHistory = [record, ...history];
+      setHistory(newHistory);
       setCurrentRecordId(record.id);
+
+      // Trigger Background Sync (Fire and forget)
+      webdav.pushChanges(newHistory, notebookEntries);
 
       setState(AppState.REVIEW);
     } catch (err) {
@@ -163,7 +199,11 @@ const App: React.FC = () => {
       };
 
       await db.saveNotebookEntry(entry);
-      setNotebookEntries(prev => [entry, ...prev]);
+      const newNotebook = [entry, ...notebookEntries];
+      setNotebookEntries(newNotebook);
+      
+      // Trigger Background Sync
+      webdav.pushChanges(history, newNotebook);
       
       const gapIndex = analysis.gaps.indexOf(gap);
       if (gapIndex !== -1) {
@@ -173,13 +213,20 @@ const App: React.FC = () => {
 
   const handleDeleteNotebookEntry = async (id: string) => {
       await db.deleteNotebookEntry(id);
-      setNotebookEntries(prev => prev.filter(e => e.id !== id));
+      const newNotebook = notebookEntries.filter(e => e.id !== id);
+      setNotebookEntries(newNotebook);
+      // Trigger Background Sync
+      webdav.pushChanges(history, newNotebook);
   };
 
   const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       await db.deleteHistory(id);
-      setHistory(prev => prev.filter(h => h.id !== id));
+      const newHistory = history.filter(h => h.id !== id);
+      setHistory(newHistory);
+      // Trigger Background Sync
+      webdav.pushChanges(newHistory, notebookEntries);
+
       if (currentRecordId === id) {
           setState(AppState.IDLE);
           setCurrentRecordId(null);
@@ -224,6 +271,7 @@ const App: React.FC = () => {
             setTopic={setTopic}
             contentLength={contentLength}
             setContentLength={setContentLength}
+            onSyncTrigger={handleManualSync}
         />
 
         <Notebook 
@@ -255,9 +303,26 @@ const App: React.FC = () => {
                         EchoBack
                         </h1>
                     </div>
+                    {isSyncing && (
+                         <div className="ml-4 flex items-center text-xs text-indigo-500 animate-pulse bg-indigo-50 px-2 py-1 rounded-full">
+                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> Syncing...
+                         </div>
+                    )}
                 </div>
             
                 <div className="flex items-center space-x-2">
+                    {/* Manual Sync Button */}
+                    <button 
+                        onClick={handleManualSync}
+                        disabled={isSyncing || !webdav.getConfig()?.enabled}
+                        className={`p-2 rounded-full transition-colors relative ${
+                            !webdav.getConfig()?.enabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100'
+                        }`}
+                        title={webdav.getConfig()?.enabled ? "Sync Now" : "Sync Disabled"}
+                    >
+                        <RefreshCw size={20} className={isSyncing ? "animate-spin text-indigo-600" : ""} />
+                    </button>
+
                     <button 
                         onClick={() => setIsSettingsOpen(true)}
                         className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
