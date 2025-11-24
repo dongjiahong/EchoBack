@@ -52,23 +52,20 @@ export class EchoDB {
   }
 
   async saveHistoryBatch(records: HistoryRecord[]): Promise<void> {
-    const db = await this.dbPromise;
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STORE_HISTORY], "readwrite");
-      const store = transaction.objectStore(STORE_HISTORY);
-      
-      let processed = 0;
-      if (records.length === 0) resolve();
+    if (records.length === 0) return;
 
-      records.forEach(record => {
-          const request = store.put(record);
-          request.onsuccess = () => {
-              processed++;
-              if (processed === records.length) resolve();
-          };
-          request.onerror = () => reject(request.error);
-      });
-    });
+    const db = await this.dbPromise;
+    const transaction = db.transaction([STORE_HISTORY], "readwrite");
+    const store = transaction.objectStore(STORE_HISTORY);
+
+    // 使用 Promise.all 并行写入，提升性能
+    await Promise.all(
+      records.map(record => new Promise<void>((resolve, reject) => {
+        const request = store.put(record);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      }))
+    );
   }
 
   async getHistory(): Promise<HistoryRecord[]> {
@@ -88,13 +85,42 @@ export class EchoDB {
     });
   }
 
+  async getHistoryPaged(offset: number, limit: number): Promise<HistoryRecord[]> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_HISTORY], "readonly");
+      const store = transaction.objectStore(STORE_HISTORY);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const results = request.result as HistoryRecord[];
+        results.sort((a, b) => b.timestamp - a.timestamp);
+        // 返回分页数据
+        resolve(results.slice(offset, offset + limit));
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getHistoryCount(): Promise<number> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_HISTORY], "readonly");
+      const store = transaction.objectStore(STORE_HISTORY);
+      const request = store.count();
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   async deleteHistory(id: string): Promise<void> {
      const db = await this.dbPromise;
      return new Promise((resolve, reject) => {
        const transaction = db.transaction([STORE_HISTORY], "readwrite");
        const store = transaction.objectStore(STORE_HISTORY);
        const request = store.delete(id);
- 
+
        request.onsuccess = () => resolve();
        request.onerror = () => reject(request.error);
      });
@@ -115,23 +141,20 @@ export class EchoDB {
   }
 
   async saveNotebookBatch(entries: NotebookEntry[]): Promise<void> {
-    const db = await this.dbPromise;
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STORE_NOTEBOOK], "readwrite");
-      const store = transaction.objectStore(STORE_NOTEBOOK);
-      
-      let processed = 0;
-      if (entries.length === 0) resolve();
+    if (entries.length === 0) return;
 
-      entries.forEach(entry => {
-          const request = store.put(entry);
-          request.onsuccess = () => {
-              processed++;
-              if (processed === entries.length) resolve();
-          };
-          request.onerror = () => reject(request.error);
-      });
-    });
+    const db = await this.dbPromise;
+    const transaction = db.transaction([STORE_NOTEBOOK], "readwrite");
+    const store = transaction.objectStore(STORE_NOTEBOOK);
+
+    // 使用 Promise.all 并行写入，提升性能
+    await Promise.all(
+      entries.map(entry => new Promise<void>((resolve, reject) => {
+        const request = store.put(entry);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      }))
+    );
   }
 
   async getNotebookEntries(): Promise<NotebookEntry[]> {
@@ -146,6 +169,35 @@ export class EchoDB {
          results.sort((a, b) => b.timestamp - a.timestamp);
          resolve(results);
       };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getNotebookPaged(offset: number, limit: number): Promise<NotebookEntry[]> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NOTEBOOK], "readonly");
+      const store = transaction.objectStore(STORE_NOTEBOOK);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const results = request.result as NotebookEntry[];
+        results.sort((a, b) => b.timestamp - a.timestamp);
+        // 返回分页数据
+        resolve(results.slice(offset, offset + limit));
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getNotebookCount(): Promise<number> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NOTEBOOK], "readonly");
+      const store = transaction.objectStore(STORE_NOTEBOOK);
+      const request = store.count();
+
+      request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
   }

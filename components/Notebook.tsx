@@ -1,17 +1,48 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NotebookEntry, GapAnalysisItem } from '../types';
-import { Trash2, X, BookMarked, Search } from 'lucide-react';
+import { Trash2, X, BookMarked, Search, Loader2 } from 'lucide-react';
 
 interface NotebookProps {
   isOpen: boolean;
   onClose: () => void;
   entries: NotebookEntry[];
   onDelete: (id: string) => void;
+  onLoadMore: () => void;
+  hasMore: boolean;
+  isLoading: boolean;
 }
 
-const Notebook: React.FC<NotebookProps> = ({ isOpen, onClose, entries, onDelete }) => {
+const Notebook: React.FC<NotebookProps> = ({
+  isOpen,
+  onClose,
+  entries,
+  onDelete,
+  onLoadMore,
+  hasMore,
+  isLoading
+}) => {
   const [filter, setFilter] = React.useState<string>('all');
   const [search, setSearch] = React.useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 滚动到底部时加载更多
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!scrollRef.current || isLoading || !hasMore) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      // 距离底部 200px 时触发加载
+      if (scrollTop + clientHeight >= scrollHeight - 200) {
+        onLoadMore();
+      }
+    };
+
+    const scrollElement = scrollRef.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scroll', handleScroll);
+      return () => scrollElement.removeEventListener('scroll', handleScroll);
+    }
+  }, [isLoading, hasMore, onLoadMore]);
 
   if (!isOpen) return null;
 
@@ -88,7 +119,7 @@ const Notebook: React.FC<NotebookProps> = ({ isOpen, onClose, entries, onDelete 
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
             {filteredEntries.length === 0 ? (
                 <div className="text-center py-12">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-50 mb-4">
@@ -97,42 +128,58 @@ const Notebook: React.FC<NotebookProps> = ({ isOpen, onClose, entries, onDelete 
                     <p className="text-slate-500">No entries found.</p>
                 </div>
             ) : (
-                filteredEntries.map((entry) => (
-                    <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative group">
-                        <button 
-                            onClick={() => onDelete(entry.id)}
-                            className="absolute top-3 right-3 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                            title="Remove"
-                        >
-                            <Trash2 size={16} />
-                        </button>
+                <>
+                    {filteredEntries.map((entry) => (
+                        <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative group">
+                            <button
+                                onClick={() => onDelete(entry.id)}
+                                className="absolute top-3 right-3 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                title="Remove"
+                            >
+                                <Trash2 size={16} />
+                            </button>
 
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-2 ${getBadgeColor(entry.gapType)}`}>
-                            {entry.gapType}
-                        </span>
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-2 ${getBadgeColor(entry.gapType)}`}>
+                                {entry.gapType}
+                            </span>
 
-                        <div className="space-y-2 mb-3">
-                             <div className="flex items-baseline gap-2 text-sm">
-                                <span className="text-slate-400 w-12 flex-shrink-0 text-xs uppercase">Native</span>
-                                <span className="font-bold text-emerald-700">{entry.nativeSegment}</span>
-                             </div>
-                             <div className="flex items-baseline gap-2 text-sm">
-                                <span className="text-slate-400 w-12 flex-shrink-0 text-xs uppercase">You</span>
-                                <span className="font-medium text-slate-500 line-through decoration-red-300 decoration-2">{entry.userSegment || '(blank)'}</span>
-                             </div>
-                        </div>
+                            <div className="space-y-2 mb-3">
+                                 <div className="flex items-baseline gap-2 text-sm">
+                                    <span className="text-slate-400 w-12 flex-shrink-0 text-xs uppercase">Native</span>
+                                    <span className="font-bold text-emerald-700">{entry.nativeSegment}</span>
+                                 </div>
+                                 <div className="flex items-baseline gap-2 text-sm">
+                                    <span className="text-slate-400 w-12 flex-shrink-0 text-xs uppercase">You</span>
+                                    <span className="font-medium text-slate-500 line-through decoration-red-300 decoration-2">{entry.userSegment || '(blank)'}</span>
+                                 </div>
+                            </div>
 
-                        <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-700 italic border-l-2 border-indigo-200">
-                            "{entry.explanation}"
+                            <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-700 italic border-l-2 border-indigo-200">
+                                "{entry.explanation}"
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-slate-100">
+                                 <p className="text-[10px] text-slate-400 truncate">
+                                    Source: {entry.originalContext}
+                                 </p>
+                            </div>
                         </div>
-                        
-                        <div className="mt-3 pt-3 border-t border-slate-100">
-                             <p className="text-[10px] text-slate-400 truncate">
-                                Source: {entry.originalContext}
-                             </p>
+                    ))}
+
+                    {/* 加载更多指示器 */}
+                    {isLoading && (
+                        <div className="flex justify-center py-4">
+                            <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
                         </div>
-                    </div>
-                ))
+                    )}
+
+                    {/* 没有更多数据提示 */}
+                    {!hasMore && entries.length > 0 && (
+                        <div className="text-center py-4 text-xs text-slate-400">
+                            No more entries
+                        </div>
+                    )}
+                </>
             )}
         </div>
 

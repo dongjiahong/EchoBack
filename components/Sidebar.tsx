@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HistoryRecord } from '../types';
-import { Clock, CheckCircle2, MoreVertical, Trash2, CalendarDays, History, Languages } from 'lucide-react';
+import { Clock, CheckCircle2, MoreVertical, Trash2, CalendarDays, History, Languages, Loader2 } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -9,6 +9,9 @@ interface SidebarProps {
   onDelete: (id: string, e: React.MouseEvent) => void;
   currentRecordId: string | null;
   onCloseMobile: () => void;
+  onLoadMore: () => void;
+  hasMore: boolean;
+  isLoading: boolean;
 }
 
 // Sub-component for individual history items to manage "Show Chinese" state independently
@@ -84,15 +87,38 @@ const SidebarItem: React.FC<{
     );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  isOpen, 
-  history, 
-  onSelect, 
-  onDelete, 
+const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  history,
+  onSelect,
+  onDelete,
   currentRecordId,
-  onCloseMobile
+  onCloseMobile,
+  onLoadMore,
+  hasMore,
+  isLoading
 }) => {
-  
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 滚动到底部时加载更多
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!scrollRef.current || isLoading || !hasMore) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      // 距离底部 200px 时触发加载
+      if (scrollTop + clientHeight >= scrollHeight - 200) {
+        onLoadMore();
+      }
+    };
+
+    const scrollElement = scrollRef.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scroll', handleScroll);
+      return () => scrollElement.removeEventListener('scroll', handleScroll);
+    }
+  }, [isLoading, hasMore, onLoadMore]);
+
   // Group history by date (Today, Yesterday, Older)
   const groupedHistory = React.useMemo(() => {
     const groups: Record<string, HistoryRecord[]> = {
@@ -141,34 +167,50 @@ const Sidebar: React.FC<SidebarProps> = ({
           <h2 className="font-bold text-slate-800">History Timeline</h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6">
           {history.length === 0 ? (
             <div className="text-center py-10 opacity-50">
                <Clock className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                <p className="text-sm text-slate-500">No history yet.<br/>Start a session!</p>
             </div>
           ) : (
-            (Object.entries(groupedHistory) as [string, HistoryRecord[]][]).map(([label, items]) => (
-              items.length > 0 && (
-                <div key={label}>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
-                    <CalendarDays size={12} className="mr-1" /> {label}
-                  </h3>
-                  <div className="space-y-3 relative border-l-2 border-slate-100 ml-1.5 pl-4">
-                    {items.map((record) => (
-                        <SidebarItem 
-                            key={record.id}
-                            record={record}
-                            isActive={currentRecordId === record.id}
-                            onSelect={onSelect}
-                            onDelete={onDelete}
-                            onCloseMobile={onCloseMobile}
-                        />
-                    ))}
+            <>
+              {(Object.entries(groupedHistory) as [string, HistoryRecord[]][]).map(([label, items]) => (
+                items.length > 0 && (
+                  <div key={label}>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
+                      <CalendarDays size={12} className="mr-1" /> {label}
+                    </h3>
+                    <div className="space-y-3 relative border-l-2 border-slate-100 ml-1.5 pl-4">
+                      {items.map((record) => (
+                          <SidebarItem
+                              key={record.id}
+                              record={record}
+                              isActive={currentRecordId === record.id}
+                              onSelect={onSelect}
+                              onDelete={onDelete}
+                              onCloseMobile={onCloseMobile}
+                          />
+                      ))}
+                    </div>
                   </div>
+                )
+              ))}
+
+              {/* 加载更多指示器 */}
+              {isLoading && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
                 </div>
-              )
-            ))
+              )}
+
+              {/* 没有更多数据提示 */}
+              {!hasMore && history.length > 0 && (
+                <div className="text-center py-4 text-xs text-slate-400">
+                  No more history
+                </div>
+              )}
+            </>
           )}
         </div>
       </aside>

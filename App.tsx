@@ -25,13 +25,56 @@ import { generateChallenge, analyzeTranslation, aiConfigManager } from './servic
 import { db } from './services/db';
 import { webdav } from './services/webdav';
 
+const GENERAL_SETTINGS_KEY = 'echoback_general_settings';
+
+interface GeneralSettings {
+  difficulty: Difficulty;
+  topic: Topic;
+  contentLength: ContentLength;
+}
+
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.IDLE);
-  
-  // Preferences
-  const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.INTERMEDIATE);
-  const [topic, setTopic] = useState<Topic>(Topic.GENERAL);
-  const [contentLength, setContentLength] = useState<ContentLength>(ContentLength.SENTENCE);
+
+  // Preferences - Load from localStorage
+  const [difficulty, setDifficulty] = useState<Difficulty>(() => {
+    try {
+      const saved = localStorage.getItem(GENERAL_SETTINGS_KEY);
+      if (saved) {
+        const settings: GeneralSettings = JSON.parse(saved);
+        return settings.difficulty || Difficulty.INTERMEDIATE;
+      }
+    } catch (e) {
+      console.error('Failed to load difficulty from localStorage', e);
+    }
+    return Difficulty.INTERMEDIATE;
+  });
+
+  const [topic, setTopic] = useState<Topic>(() => {
+    try {
+      const saved = localStorage.getItem(GENERAL_SETTINGS_KEY);
+      if (saved) {
+        const settings: GeneralSettings = JSON.parse(saved);
+        return settings.topic || Topic.GENERAL;
+      }
+    } catch (e) {
+      console.error('Failed to load topic from localStorage', e);
+    }
+    return Topic.GENERAL;
+  });
+
+  const [contentLength, setContentLength] = useState<ContentLength>(() => {
+    try {
+      const saved = localStorage.getItem(GENERAL_SETTINGS_KEY);
+      if (saved) {
+        const settings: GeneralSettings = JSON.parse(saved);
+        return settings.contentLength || ContentLength.SENTENCE;
+      }
+    } catch (e) {
+      console.error('Failed to load contentLength from localStorage', e);
+    }
+    return ContentLength.SENTENCE;
+  });
   
   // Data State
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -40,37 +83,61 @@ const App: React.FC = () => {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // History & Persistence
-  const [history, setHistory] = useState<HistoryRecord[]>([]);
+  // History & Persistence - 分页管理
+  const [displayedHistory, setDisplayedHistory] = useState<HistoryRecord[]>([]);
+  const [currentHistoryPage, setCurrentHistoryPage] = useState(0);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile toggle
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // UI State
+  // UI State - 分页管理
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
-  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
+  const [displayedNotebook, setDisplayedNotebook] = useState<NotebookEntry[]>([]);
+  const [currentNotebookPage, setCurrentNotebookPage] = useState(0);
+  const [hasMoreNotebook, setHasMoreNotebook] = useState(true);
+  const [isLoadingNotebook, setIsLoadingNotebook] = useState(false);
   const [currentSessionSavedIndices, setCurrentSessionSavedIndices] = useState<number[]>([]);
 
   // Ref for auto-focusing
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
-  // Load Data from IDB & Sync
+  // Save General Settings to localStorage
+  useEffect(() => {
+    try {
+      const settings: GeneralSettings = {
+        difficulty,
+        topic,
+        contentLength
+      };
+      localStorage.setItem(GENERAL_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+      console.error('Failed to save general settings to localStorage', e);
+    }
+  }, [difficulty, topic, contentLength]);
+
+  // Load Data from IDB & Sync - 使用分页加载
   useEffect(() => {
       const initApp = async () => {
           try {
-              // 1. Load Local
+              // 1. Load Local (只加载第一页，50条)
+              const PAGE_SIZE = 50;
               let [hist, nb] = await Promise.all([
-                  db.getHistory(),
-                  db.getNotebookEntries()
+                  db.getHistoryPaged(0, PAGE_SIZE),
+                  db.getNotebookPaged(0, PAGE_SIZE)
               ]);
-              setHistory(hist);
-              setNotebookEntries(nb);
+
+              setDisplayedHistory(hist);
+              setDisplayedNotebook(nb);
+              setHasMoreHistory(hist.length === PAGE_SIZE);
+              setHasMoreNotebook(nb.length === PAGE_SIZE);
 
               // 2. Try Sync if Configured
               if (webdav.getConfig()?.enabled) {
-                  await performSync(hist, nb);
+                  await performSync();
               }
           } catch (e) {
               console.error("Failed to load data from DB", e);
@@ -79,18 +146,34 @@ const App: React.FC = () => {
       initApp();
   }, []);
 
-  const performSync = async (currentHistory: HistoryRecord[], currentNotebook: NotebookEntry[]) => {
+  const performSync = async () => {
       setIsSyncing(true);
       try {
-          const result = await webdav.syncData(currentHistory, currentNotebook);
-          
+          // 获取全部本地数据用于同步
+          const [allHistory, allNotebook] = await Promise.all([
+              db.getHistory(),
+              db.getNotebookEntries()
+          ]);
+
+          const result = await webdav.syncData(allHistory, allNotebook);
+
           // Update DB
           await db.saveHistoryBatch(result.history);
           await db.saveNotebookBatch(result.notebook);
 
-          // Update State
-          setHistory(result.history);
-          setNotebookEntries(result.notebook);
+          // 重新加载显示的第一页
+          const PAGE_SIZE = 50;
+          const [hist, nb] = await Promise.all([
+              db.getHistoryPaged(0, PAGE_SIZE),
+              db.getNotebookPaged(0, PAGE_SIZE)
+          ]);
+
+          setDisplayedHistory(hist);
+          setDisplayedNotebook(nb);
+          setCurrentHistoryPage(0);
+          setCurrentNotebookPage(0);
+          setHasMoreHistory(hist.length === PAGE_SIZE);
+          setHasMoreNotebook(nb.length === PAGE_SIZE);
       } catch (err) {
           console.error("Sync failed", err);
       } finally {
@@ -99,7 +182,7 @@ const App: React.FC = () => {
   };
 
   const handleManualSync = () => {
-      performSync(history, notebookEntries);
+      performSync();
   };
 
   // Scroll to top on state change
@@ -169,12 +252,15 @@ const App: React.FC = () => {
       };
 
       await db.saveHistory(record);
-      const newHistory = [record, ...history];
-      setHistory(newHistory);
+
+      // 添加到显示列表的开头
+      setDisplayedHistory([record, ...displayedHistory]);
       setCurrentRecordId(record.id);
 
       // Trigger Background Sync (Fire and forget)
-      webdav.pushChanges(newHistory, notebookEntries);
+      const allHistory = await db.getHistory();
+      const allNotebook = await db.getNotebookEntries();
+      webdav.pushChanges(allHistory, allNotebook);
 
       setState(AppState.REVIEW);
     } catch (err) {
@@ -206,11 +292,14 @@ const App: React.FC = () => {
       };
 
       await db.saveNotebookEntry(entry);
-      const newNotebook = [entry, ...notebookEntries];
-      setNotebookEntries(newNotebook);
-      
+
+      // 添加到显示列表的开头
+      setDisplayedNotebook([entry, ...displayedNotebook]);
+
       // Trigger Background Sync
-      webdav.pushChanges(history, newNotebook);
+      const allHistory = await db.getHistory();
+      const allNotebook = await db.getNotebookEntries();
+      webdav.pushChanges(allHistory, allNotebook);
       
       const gapIndex = analysis.gaps.indexOf(gap);
       if (gapIndex !== -1) {
@@ -220,19 +309,27 @@ const App: React.FC = () => {
 
   const handleDeleteNotebookEntry = async (id: string) => {
       await db.deleteNotebookEntry(id);
-      const newNotebook = notebookEntries.filter(e => e.id !== id);
-      setNotebookEntries(newNotebook);
+
+      // 从显示列表中移除
+      setDisplayedNotebook(displayedNotebook.filter(e => e.id !== id));
+
       // Trigger Background Sync
-      webdav.pushChanges(history, newNotebook);
+      const allHistory = await db.getHistory();
+      const allNotebook = await db.getNotebookEntries();
+      webdav.pushChanges(allHistory, allNotebook);
   };
 
   const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       await db.deleteHistory(id);
-      const newHistory = history.filter(h => h.id !== id);
-      setHistory(newHistory);
+
+      // 从显示列表中移除
+      setDisplayedHistory(displayedHistory.filter(h => h.id !== id));
+
       // Trigger Background Sync
-      webdav.pushChanges(newHistory, notebookEntries);
+      const allHistory = await db.getHistory();
+      const allNotebook = await db.getNotebookEntries();
+      webdav.pushChanges(allHistory, allNotebook);
 
       if (currentRecordId === id) {
           setState(AppState.IDLE);
@@ -247,22 +344,77 @@ const App: React.FC = () => {
       setCurrentRecordId(record.id);
       setDifficulty(record.difficulty);
       setTopic(record.topic);
-      
+
       setCurrentSessionSavedIndices([]);
       setState(AppState.REVIEW);
+  };
+
+  // 加载更多历史记录
+  const handleLoadMoreHistory = async () => {
+      if (isLoadingHistory || !hasMoreHistory) return;
+
+      setIsLoadingHistory(true);
+      try {
+          const PAGE_SIZE = 50;
+          const nextPage = currentHistoryPage + 1;
+          const offset = nextPage * PAGE_SIZE;
+
+          const moreRecords = await db.getHistoryPaged(offset, PAGE_SIZE);
+
+          if (moreRecords.length > 0) {
+              setDisplayedHistory([...displayedHistory, ...moreRecords]);
+              setCurrentHistoryPage(nextPage);
+              setHasMoreHistory(moreRecords.length === PAGE_SIZE);
+          } else {
+              setHasMoreHistory(false);
+          }
+      } catch (err) {
+          console.error("Failed to load more history", err);
+      } finally {
+          setIsLoadingHistory(false);
+      }
+  };
+
+  // 加载更多笔记本条目
+  const handleLoadMoreNotebook = async () => {
+      if (isLoadingNotebook || !hasMoreNotebook) return;
+
+      setIsLoadingNotebook(true);
+      try {
+          const PAGE_SIZE = 50;
+          const nextPage = currentNotebookPage + 1;
+          const offset = nextPage * PAGE_SIZE;
+
+          const moreEntries = await db.getNotebookPaged(offset, PAGE_SIZE);
+
+          if (moreEntries.length > 0) {
+              setDisplayedNotebook([...displayedNotebook, ...moreEntries]);
+              setCurrentNotebookPage(nextPage);
+              setHasMoreNotebook(moreEntries.length === PAGE_SIZE);
+          } else {
+              setHasMoreNotebook(false);
+          }
+      } catch (err) {
+          console.error("Failed to load more notebook entries", err);
+      } finally {
+          setIsLoadingNotebook(false);
+      }
   };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 overflow-hidden">
       
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         isOpen={isSidebarOpen}
-        history={history}
+        history={displayedHistory}
         onSelect={handleSelectHistory}
         onDelete={handleDeleteHistory}
         currentRecordId={currentRecordId}
         onCloseMobile={() => setIsSidebarOpen(false)}
+        onLoadMore={handleLoadMoreHistory}
+        hasMore={hasMoreHistory}
+        isLoading={isLoadingHistory}
       />
 
       {/* Main Content Area */}
@@ -281,11 +433,14 @@ const App: React.FC = () => {
             onSyncTrigger={handleManualSync}
         />
 
-        <Notebook 
+        <Notebook
             isOpen={isNotebookOpen}
             onClose={() => setIsNotebookOpen(false)}
-            entries={notebookEntries}
+            entries={displayedNotebook}
             onDelete={handleDeleteNotebookEntry}
+            onLoadMore={handleLoadMoreNotebook}
+            hasMore={hasMoreNotebook}
+            isLoading={isLoadingNotebook}
         />
 
         {/* Header */}
@@ -338,13 +493,13 @@ const App: React.FC = () => {
                         <SettingsIcon size={20} />
                     </button>
                     
-                    <button 
+                    <button
                         onClick={() => setIsNotebookOpen(true)}
                         className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
                         title="My Notebook"
                     >
                         <BookMarked size={20} />
-                        {notebookEntries.length > 0 && (
+                        {displayedNotebook.length > 0 && (
                             <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-amber-500 rounded-full border-2 border-white"></span>
                         )}
                     </button>

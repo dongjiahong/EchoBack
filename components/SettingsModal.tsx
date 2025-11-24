@@ -29,6 +29,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSyncTrigger
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'sync'>('general');
+
+  // Local state for General settings
+  const [localDifficulty, setLocalDifficulty] = useState<Difficulty>(difficulty);
+  const [localTopic, setLocalTopic] = useState<Topic>(topic);
+  const [localContentLength, setLocalContentLength] = useState<ContentLength>(contentLength);
+
   const [davConfig, setDavConfig] = useState<WebDAVConfig>({
       url: '',
       username: '',
@@ -45,17 +51,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
   useEffect(() => {
+      // Sync local state with props when modal opens
+      setLocalDifficulty(difficulty);
+      setLocalTopic(topic);
+      setLocalContentLength(contentLength);
+
       const currentDav = webdav.getConfig();
       if (currentDav) setDavConfig(currentDav);
 
       const currentAi = aiConfigManager.getConfig();
       if (currentAi) setAiConfig(currentAi);
-  }, [isOpen]);
+  }, [isOpen, difficulty, topic, contentLength]);
 
   const handleTestConnection = async () => {
       setTestStatus('testing');
       const success = await webdav.checkConnection(davConfig);
       setTestStatus(success ? 'success' : 'error');
+  };
+
+  const handleSaveGeneral = () => {
+      setDifficulty(localDifficulty);
+      setTopic(localTopic);
+      setContentLength(localContentLength);
+      onClose();
   };
 
   const handleSaveAI = () => {
@@ -127,14 +145,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         {Object.values(Difficulty).map((level) => (
                             <button
                                 key={level}
-                                onClick={() => setDifficulty(level)}
+                                onClick={() => setLocalDifficulty(level)}
                                 className={`flex items-center px-3 py-2 rounded-lg text-sm border transition-all ${
-                                    difficulty === level 
-                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium' 
+                                    localDifficulty === level
+                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium'
                                     : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                                 }`}
                             >
-                                <div className={`w-3 h-3 rounded-full mr-3 border ${difficulty === level ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'}`}></div>
+                                <div className={`w-3 h-3 rounded-full mr-3 border ${localDifficulty === level ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'}`}></div>
                                 {level}
                             </button>
                         ))}
@@ -147,9 +165,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <Layers className="w-4 h-4 mr-2 text-purple-500" />
                         Content Topic
                     </label>
-                    <select 
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value as Topic)}
+                    <select
+                        value={localTopic}
+                        onChange={(e) => setLocalTopic(e.target.value as Topic)}
                         className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     >
                         {Object.values(Topic).map((t) => (
@@ -168,9 +186,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         {Object.values(ContentLength).map((len) => (
                             <button
                                 key={len}
-                                onClick={() => setContentLength(len)}
+                                onClick={() => setLocalContentLength(len)}
                                 className={`flex-1 py-2 rounded-lg text-sm border transition-all ${
-                                    contentLength === len
+                                    localContentLength === len
                                     ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-medium'
                                     : 'border-slate-200 hover:bg-slate-50 text-slate-600'
                                 }`}
@@ -363,8 +381,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         <div className="p-4 border-t border-slate-100 bg-slate-50">
             {activeTab === 'general' ? (
-                <Button onClick={onClose} className="w-full justify-center">
-                    Done
+                <Button onClick={handleSaveGeneral} className="w-full justify-center">
+                    <Save className="w-4 h-4 mr-2" /> Save General Settings
                 </Button>
             ) : activeTab === 'ai' ? (
                 <Button onClick={handleSaveAI} className="w-full justify-center">

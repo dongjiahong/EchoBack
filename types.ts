@@ -88,3 +88,25 @@ export interface AIConfig {
   openaiBaseUrl?: string; // 用于兼容 OpenAI API 的自定义服务
   openaiModel?: string; // 默认 gpt-4o 或 gpt-4o-mini
 }
+
+// WebDAV 分页存储类型定义
+export interface PageMetadata {
+  pageNumber: number;
+  recordCount: number;
+  lastModified: number;
+  etag?: string;
+}
+
+export interface PageIndex {
+  version: number; // 固定为 2
+  totalRecords: number;
+  pageSize: number; // 固定为 100
+  totalPages: number;
+  lastSyncTime: number;
+  pages: PageMetadata[];
+}
+
+export interface PagedData<T> {
+  pageNumber: number;
+  records: T[];
+}
