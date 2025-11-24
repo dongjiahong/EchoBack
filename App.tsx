@@ -508,9 +508,9 @@ const App: React.FC = () => {
         </header>
 
         {/* Scrollable Main View */}
-        <div ref={mainScrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth">
-            
-            <div className="max-w-3xl mx-auto pb-20">
+        <div ref={mainScrollRef} className="flex-1 overflow-y-auto p-3 md:p-8 relative scroll-smooth">
+
+            <div className="max-w-3xl mx-auto pb-16 md:pb-20">
                 {/* Error Banner */}
                 {error && (
                     <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg flex items-start animate-pulse">
@@ -521,15 +521,15 @@ const App: React.FC = () => {
 
                 {/* STATE: IDLE */}
                 {state === AppState.IDLE && (
-                <div className="flex flex-col items-center text-center space-y-8 mt-4 animate-in fade-in duration-500">
-                    <div className="max-w-lg">
-                        <h2 className="text-3xl font-bold text-slate-900 mb-4">Master English through Back-Translation</h2>
-                        <p className="text-slate-600 text-lg leading-relaxed">
+                <div className="flex flex-col items-center text-center space-y-4 md:space-y-8 mt-2 md:mt-4 animate-in fade-in duration-500">
+                    <div className="max-w-lg px-2">
+                        <h2 className="text-xl md:text-3xl font-bold text-slate-900 mb-3 md:mb-4">Master English through Back-Translation</h2>
+                        <p className="text-slate-600 text-sm md:text-lg leading-relaxed">
                             The professional "Echo Method". Study native text, hide it, recreate it, and bridge the gap.
                         </p>
                     </div>
 
-                    <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="w-full max-w-md bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="mb-4 flex justify-between items-center text-sm text-slate-500 border-b border-slate-100 pb-3">
                             <span>Current Config:</span>
                             <button 
@@ -593,14 +593,14 @@ const App: React.FC = () => {
                                 </span>
                             </div>
                             
-                            <div className="p-8 space-y-8">
+                            <div className="p-4 md:p-8 space-y-6 md:space-y-8">
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Native English</h3>
-                                    <p className="text-2xl font-serif text-slate-900 leading-relaxed selection:bg-indigo-100 selection:text-indigo-800">
+                                    <p className="text-lg md:text-2xl font-serif text-slate-900 leading-relaxed selection:bg-indigo-100 selection:text-indigo-800">
                                         {challenge.english}
                                     </p>
                                 </div>
-                                
+
                                 <div className="relative">
                                     <div className="absolute inset-0 flex items-center" aria-hidden="true">
                                         <div className="w-full border-t border-slate-100"></div>
@@ -612,20 +612,20 @@ const App: React.FC = () => {
 
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Chinese Meaning</h3>
-                                    <p className="text-xl font-medium text-slate-700">
+                                    <p className="text-base md:text-xl font-medium text-slate-700">
                                         {challenge.chinese}
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-8 text-sm text-blue-800 flex items-start">
-                            <Eye className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5" />
+                        <div className="bg-blue-50 p-3 md:p-4 rounded-lg border border-blue-100 mb-6 md:mb-8 text-xs md:text-sm text-blue-800 flex items-start">
+                            <Eye className="h-4 w-4 md:h-5 md:w-5 mr-2 md:mr-3 flex-shrink-0 mt-0.5" />
                             <p>Read the English sentence carefully. Understand the structure. When you are ready, we will hide it.</p>
                         </div>
 
-                        <Button onClick={handleProceedToInput} size="lg" className="w-full justify-center">
-                            I'm Ready to Translate <ArrowRight className="ml-2 h-5 w-5" />
+                        <Button onClick={handleProceedToInput} size="lg" className="w-full justify-center text-sm md:text-base">
+                            I'm Ready to Translate <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
                         </Button>
                     </div>
                 )}
@@ -644,9 +644,9 @@ const App: React.FC = () => {
 
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
                             {/* Blurred Original */}
-                            <div className="p-6 bg-slate-50 border-b border-slate-100 relative select-none">
+                            <div className="p-4 md:p-6 bg-slate-50 border-b border-slate-100 relative select-none">
                                 <div className="filter blur-sm opacity-40 pointer-events-none select-none" aria-hidden="true">
-                                    <p className="text-xl font-serif text-slate-900">{challenge.english}</p>
+                                    <p className="text-base md:text-xl font-serif text-slate-900">{challenge.english}</p>
                                 </div>
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm flex items-center text-slate-500 text-sm font-medium border border-slate-200">
@@ -657,19 +657,19 @@ const App: React.FC = () => {
                             </div>
 
                             {/* Chinese Prompt */}
-                            <div className="px-6 py-4 bg-white">
+                            <div className="px-4 md:px-6 py-3 md:py-4 bg-white">
                                 <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Translate back to English</h3>
-                                <p className="text-lg font-medium text-slate-800">{challenge.chinese}</p>
+                                <p className="text-base md:text-lg font-medium text-slate-800">{challenge.chinese}</p>
                             </div>
 
                             {/* User Input - White Theme */}
-                            <div className="p-6 bg-slate-50 border-t border-slate-100">
+                            <div className="p-4 md:p-6 bg-slate-50 border-t border-slate-100">
                                 <textarea
                                     ref={inputRef}
                                     value={userTranslation}
                                     onChange={(e) => setUserTranslation(e.target.value)}
                                     placeholder="Type the English translation here..."
-                                    className="w-full p-4 text-xl text-slate-900 bg-white placeholder:text-slate-400 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none min-h-[160px] outline-none shadow-sm transition-all"
+                                    className="w-full p-3 md:p-4 text-base md:text-xl text-slate-900 bg-white placeholder:text-slate-400 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none min-h-[120px] md:min-h-[160px] outline-none shadow-sm transition-all"
                                     spellCheck={false}
                                 />
                             </div>
