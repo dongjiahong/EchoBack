@@ -21,7 +21,7 @@ import SettingsModal from './components/SettingsModal';
 import Notebook from './components/Notebook';
 import Sidebar from './components/Sidebar';
 import { AppState, Difficulty, Challenge, AnalysisResult, Topic, ContentLength, NotebookEntry, GapAnalysisItem, HistoryRecord } from './types';
-import { generateChallenge, analyzeTranslation } from './services/geminiService';
+import { generateChallenge, analyzeTranslation, aiConfigManager } from './services/aiService';
 import { db } from './services/db';
 import { webdav } from './services/webdav';
 
@@ -118,20 +118,27 @@ const App: React.FC = () => {
   }, [state]);
 
   const handleStart = async () => {
+    // 检查 AI 配置
+    if (!aiConfigManager.hasValidConfig()) {
+      setError("Please configure AI settings first (Settings -> AI Settings)");
+      setIsSettingsOpen(true);
+      return;
+    }
+
     setState(AppState.GENERATING);
     setError(null);
     setAnalysis(null);
     setUserTranslation('');
     setIsOriginalHidden(false);
-    setCurrentSessionSavedIndices([]); 
+    setCurrentSessionSavedIndices([]);
     setCurrentRecordId(null); // New session, no record ID yet
 
     try {
       const newChallenge = await generateChallenge(difficulty, topic, contentLength);
       setChallenge(newChallenge);
       setState(AppState.STUDY);
-    } catch (err) {
-      setError("Failed to generate content. Please check your connection or try again.");
+    } catch (err: any) {
+      setError(err.message || "Failed to generate content. Please check your connection or try again.");
       setState(AppState.IDLE);
     }
   };

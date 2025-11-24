@@ -75,3 +75,16 @@ export interface WebDAVConfig {
   password: string;
   enabled: boolean;
 }
+
+export enum AIProvider {
+  GEMINI = 'gemini',
+  OPENAI = 'openai'
+}
+
+export interface AIConfig {
+  provider: AIProvider;
+  geminiApiKey?: string;
+  openaiApiKey?: string;
+  openaiBaseUrl?: string; // 用于兼容 OpenAI API 的自定义服务
+  openaiModel?: string; // 默认 gpt-4o 或 gpt-4o-mini
+}

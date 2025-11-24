@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Difficulty, Topic, ContentLength, WebDAVConfig } from '../types';
-import { Settings, X, Layout, Layers, GraduationCap, Cloud, Check, AlertCircle, Save } from 'lucide-react';
+import { Difficulty, Topic, ContentLength, WebDAVConfig, AIConfig, AIProvider } from '../types';
+import { Settings, X, Layout, Layers, GraduationCap, Cloud, Check, AlertCircle, Save, Sparkles } from 'lucide-react';
 import Button from './Button';
 import { webdav } from '../services/webdav';
+import { aiConfigManager } from '../services/aiService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -27,24 +28,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   setContentLength,
   onSyncTrigger
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'sync'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'sync'>('general');
   const [davConfig, setDavConfig] = useState<WebDAVConfig>({
       url: '',
       username: '',
       password: '',
       enabled: false
   });
+  const [aiConfig, setAiConfig] = useState<AIConfig>({
+      provider: AIProvider.GEMINI,
+      geminiApiKey: '',
+      openaiApiKey: '',
+      openaiBaseUrl: 'https://api.openai.com/v1',
+      openaiModel: 'gpt-4o-mini'
+  });
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
   useEffect(() => {
-      const current = webdav.getConfig();
-      if (current) setDavConfig(current);
+      const currentDav = webdav.getConfig();
+      if (currentDav) setDavConfig(currentDav);
+
+      const currentAi = aiConfigManager.getConfig();
+      if (currentAi) setAiConfig(currentAi);
   }, [isOpen]);
 
   const handleTestConnection = async () => {
       setTestStatus('testing');
       const success = await webdav.checkConnection(davConfig);
       setTestStatus(success ? 'success' : 'error');
+  };
+
+  const handleSaveAI = () => {
+      aiConfigManager.saveConfig(aiConfig);
+      onClose();
   };
 
   const handleSaveWebDAV = () => {
@@ -77,17 +93,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Tabs */}
         <div className="flex border-b border-slate-100">
-            <button 
+            <button
                 className={`flex-1 py-3 text-sm font-medium ${activeTab === 'general' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
                 onClick={() => setActiveTab('general')}
             >
                 General
             </button>
-            <button 
+            <button
+                className={`flex-1 py-3 text-sm font-medium ${activeTab === 'ai' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                onClick={() => setActiveTab('ai')}
+            >
+                AI Settings
+            </button>
+            <button
                 className={`flex-1 py-3 text-sm font-medium ${activeTab === 'sync' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
                 onClick={() => setActiveTab('sync')}
             >
-                Sync (WebDAV)
+                Sync
             </button>
         </div>
 
@@ -159,6 +181,111 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                 </div>
                 </>
+            ) : activeTab === 'ai' ? (
+                <div className="space-y-4">
+                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-lg flex items-start">
+                        <Sparkles className="w-5 h-5 text-amber-500 mr-3 mt-0.5" />
+                        <p className="text-sm text-amber-800">
+                            选择 AI 提供商并配置 API Key。支持 Google Gemini 或兼容 OpenAI 的 API。
+                        </p>
+                    </div>
+
+                    {/* Provider Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">AI Provider</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => setAiConfig({...aiConfig, provider: AIProvider.GEMINI})}
+                                className={`flex items-center justify-center px-4 py-3 rounded-lg text-sm border transition-all ${
+                                    aiConfig.provider === AIProvider.GEMINI
+                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium'
+                                    : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                                }`}
+                            >
+                                <div className={`w-3 h-3 rounded-full mr-2 border ${aiConfig.provider === AIProvider.GEMINI ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'}`}></div>
+                                Gemini
+                            </button>
+                            <button
+                                onClick={() => setAiConfig({...aiConfig, provider: AIProvider.OPENAI})}
+                                className={`flex items-center justify-center px-4 py-3 rounded-lg text-sm border transition-all ${
+                                    aiConfig.provider === AIProvider.OPENAI
+                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium'
+                                    : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                                }`}
+                            >
+                                <div className={`w-3 h-3 rounded-full mr-2 border ${aiConfig.provider === AIProvider.OPENAI ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'}`}></div>
+                                OpenAI
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Gemini Config */}
+                    {aiConfig.provider === AIProvider.GEMINI && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                Gemini API Key
+                            </label>
+                            <input
+                                type="password"
+                                className="w-full p-2 border rounded-lg text-sm font-mono"
+                                placeholder="AIza... (支持多个 key，用逗号分隔)"
+                                value={aiConfig.geminiApiKey || ''}
+                                onChange={e => setAiConfig({...aiConfig, geminiApiKey: e.target.value})}
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                在 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Google AI Studio</a> 获取 API Key。支持多个 key，用逗号分隔，使用时会随机选择。
+                            </p>
+                        </div>
+                    )}
+
+                    {/* OpenAI Config */}
+                    {aiConfig.provider === AIProvider.OPENAI && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    OpenAI API Key
+                                </label>
+                                <input
+                                    type="password"
+                                    className="w-full p-2 border rounded-lg text-sm font-mono"
+                                    placeholder="sk-... (支持多个 key，用逗号分隔)"
+                                    value={aiConfig.openaiApiKey || ''}
+                                    onChange={e => setAiConfig({...aiConfig, openaiApiKey: e.target.value})}
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    支持多个 key，用逗号分隔，使用时会随机选择。
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Base URL (可选)
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border rounded-lg text-sm"
+                                    placeholder="https://api.openai.com/v1"
+                                    value={aiConfig.openaiBaseUrl || ''}
+                                    onChange={e => setAiConfig({...aiConfig, openaiBaseUrl: e.target.value})}
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    用于兼容 OpenAI 的第三方 API。尾部斜杠会自动处理。
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Model (可选)
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border rounded-lg text-sm"
+                                    placeholder="gpt-4o-mini"
+                                    value={aiConfig.openaiModel || ''}
+                                    onChange={e => setAiConfig({...aiConfig, openaiModel: e.target.value})}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
             ) : (
                 <div className="space-y-4">
                     <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex items-start">
@@ -238,6 +365,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'general' ? (
                 <Button onClick={onClose} className="w-full justify-center">
                     Done
+                </Button>
+            ) : activeTab === 'ai' ? (
+                <Button onClick={handleSaveAI} className="w-full justify-center">
+                    <Save className="w-4 h-4 mr-2" /> Save AI Settings
                 </Button>
             ) : (
                 <Button onClick={handleSaveWebDAV} className="w-full justify-center">
