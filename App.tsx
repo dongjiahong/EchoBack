@@ -458,9 +458,7 @@ const App: React.FC = () => {
                         className="flex items-center space-x-2 cursor-pointer" 
                         onClick={() => setState(AppState.IDLE)}
                     >
-                        <div className="bg-indigo-600 p-1.5 rounded-lg hidden sm:block">
-                            <Languages className="text-white h-4 w-4" />
-                        </div>
+                        <img src="/logo.svg" alt="Logo" className="h-8 w-8 hidden sm:block" />
                         <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
                         EchoBack
                         </h1>

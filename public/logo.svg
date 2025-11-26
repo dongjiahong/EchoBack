@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#4F46E5" />
+            <stop offset="100%" stop-color="#9333EA" />
+        </linearGradient>
+    </defs>
+    <!-- Top Arrow (Left to Right) -->
+    <path d="M100 256C100 169.8 169.8 100 256 100H360" stroke="url(#logoGradient)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M330 60L380 100L330 140" fill="url(#logoGradient)"/>
+    
+    <!-- Bottom Arrow (Right to Left) -->
+    <path d="M412 256C412 342.2 342.2 412 256 412H152" stroke="url(#logoGradient)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M182 452L132 412L182 372" fill="url(#logoGradient)"/>
+    
+    <!-- Center Lines (Abstract Text/Echo) -->
+    <rect x="190" y="190" width="132" height="28" rx="14" fill="#4F46E5" opacity="0.9"/>
+    <rect x="190" y="242" width="90" height="28" rx="14" fill="#6366F1" opacity="0.7"/>
+    <rect x="190" y="294" width="132" height="28" rx="14" fill="#818CF8" opacity="0.9"/>
+</svg>
