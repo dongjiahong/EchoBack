@@ -213,6 +213,19 @@ export class EchoDB {
       request.onerror = () => reject(request.error);
     });
   }
+
+  /**
+   * 检查某个 gap 是否已保存到笔记本
+   * 通过比对 originalContext, userSegment, nativeSegment 来判断
+   */
+  async isGapSaved(originalContext: string, userSegment: string, nativeSegment: string): Promise<boolean> {
+    const entries = await this.getNotebookEntries();
+    return entries.some(entry =>
+      entry.originalContext === originalContext &&
+      entry.userSegment === userSegment &&
+      entry.nativeSegment === nativeSegment
+    );
+  }
 }
 
 export const db = new EchoDB();

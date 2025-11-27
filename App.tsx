@@ -238,8 +238,8 @@ const App: React.FC = () => {
     try {
       const result = await analyzeTranslation(challenge.english, userTranslation, challenge.context);
       setAnalysis(result);
-      setIsOriginalHidden(false); 
-      
+      setIsOriginalHidden(false);
+
       // Save to History DB
       const record: HistoryRecord = {
           id: crypto.randomUUID(),
@@ -256,6 +256,48 @@ const App: React.FC = () => {
       // 添加到显示列表的开头
       setDisplayedHistory([record, ...displayedHistory]);
       setCurrentRecordId(record.id);
+
+      // 自动保存所有 gap 到笔记本
+      const savedIndices: number[] = [];
+      if (result.gaps && result.gaps.length > 0) {
+          const newNotebookEntries: NotebookEntry[] = [];
+
+          for (let i = 0; i < result.gaps.length; i++) {
+              const gap = result.gaps[i];
+
+              // 检查是否已经保存过
+              const alreadySaved = await db.isGapSaved(
+                  challenge.english,
+                  gap.userSegment,
+                  gap.nativeSegment
+              );
+
+              if (!alreadySaved) {
+                  const entry: NotebookEntry = {
+                      id: crypto.randomUUID(),
+                      timestamp: Date.now(),
+                      originalContext: challenge.english,
+                      gapType: gap.type,
+                      nativeSegment: gap.nativeSegment,
+                      userSegment: gap.userSegment,
+                      explanation: gap.explanation
+                  };
+
+                  await db.saveNotebookEntry(entry);
+                  newNotebookEntries.push(entry);
+              }
+
+              // 标记为已保存
+              savedIndices.push(i);
+          }
+
+          // 更新显示的笔记本列表
+          if (newNotebookEntries.length > 0) {
+              setDisplayedNotebook([...newNotebookEntries, ...displayedNotebook]);
+          }
+      }
+
+      setCurrentSessionSavedIndices(savedIndices);
 
       // Trigger Background Sync (Fire and forget)
       const allHistory = await db.getHistory();
@@ -337,7 +379,7 @@ const App: React.FC = () => {
       }
   };
 
-  const handleSelectHistory = (record: HistoryRecord) => {
+  const handleSelectHistory = async (record: HistoryRecord) => {
       setChallenge(record.challenge);
       setUserTranslation(record.userTranslation);
       setAnalysis(record.analysis);
@@ -345,7 +387,22 @@ const App: React.FC = () => {
       setDifficulty(record.difficulty);
       setTopic(record.topic);
 
-      setCurrentSessionSavedIndices([]);
+      // 检查哪些 gap 已经保存到笔记本
+      const savedIndices: number[] = [];
+      if (record.analysis?.gaps) {
+          for (let i = 0; i < record.analysis.gaps.length; i++) {
+              const gap = record.analysis.gaps[i];
+              const isSaved = await db.isGapSaved(
+                  record.challenge.english,
+                  gap.userSegment,
+                  gap.nativeSegment
+              );
+              if (isSaved) {
+                  savedIndices.push(i);
+              }
+          }
+      }
+      setCurrentSessionSavedIndices(savedIndices);
       setState(AppState.REVIEW);
   };
 
